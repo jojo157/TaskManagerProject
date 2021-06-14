@@ -8,6 +8,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 if os.path.exists("env.py"):
     import env
 
+
 app = Flask(__name__)
 
 app.config["MONGO_DBNAME"] = os.environ.get("MONGO_DBNAME")
@@ -16,10 +17,11 @@ app.secret_key = os.environ.get("SECRET_KEY")
 
 mongo = PyMongo(app)
 
+
 @app.route("/")
 @app.route("/get_tasks")
 def get_tasks():
-    tasks = mongo.db.tasks.find()
+    tasks = list(mongo.db.tasks.find())
     return render_template("tasks.html", tasks=tasks)
 
 
@@ -43,7 +45,8 @@ def register():
         # put the new user into 'session' cookie
         session["user"] = request.form.get("username").lower()
         flash("Registration Successful!")
-        return redirect(url_for("profile", username=session['user']))
+        return redirect(url_for("profile", username=session["user"]))
+
     return render_template("register.html")
 
 
@@ -57,10 +60,12 @@ def login():
         if existing_user:
             # ensure hashed password matches user input
             if check_password_hash(
-                existing_user["password"], request.form.get("password")):
-                    session["user"] = request.form.get("username").lower()
-                    flash("Welcome, {}".format(request.form.get("username")))
-                    return redirect(url_for("profile", username=session['user']))
+                    existing_user["password"], request.form.get("password")):
+                        session["user"] = request.form.get("username").lower()
+                        flash("Welcome, {}".format(
+                            request.form.get("username")))
+                        return redirect(url_for(
+                            "profile", username=session["user"]))
             else:
                 # invalid password match
                 flash("Incorrect Username and/or Password")
@@ -73,6 +78,7 @@ def login():
 
     return render_template("login.html")
 
+
 @app.route("/profile/<username>", methods=["GET", "POST"])
 def profile(username):
     # grab the session user's username from db
@@ -81,16 +87,17 @@ def profile(username):
 
     if session["user"]:
         return render_template("profile.html", username=username)
-    
+
     return redirect(url_for("login"))
 
 
 @app.route("/logout")
 def logout():
-    #remove user from session cookies
+    # remove user from session cookie
     flash("You have been logged out")
     session.pop("user")
     return redirect(url_for("login"))
+
 
 @app.route("/add_task", methods=["GET", "POST"])
 def add_task():
@@ -111,6 +118,25 @@ def add_task():
     categories = mongo.db.categories.find().sort("category_name", 1)
     return render_template("add_task.html", categories=categories)
 
+
+@app.route("/edit_task/<task_id>", methods=["GET", "POST"])
+def edit_task(task_id):
+    if request.method == "POST":
+        is_urgent = "on" if request.form.get("is_urgent") else "off"
+        submit = {
+            "category_name": request.form.get("category_name"),
+            "task_name": request.form.get("task_name"),
+            "task_description": request.form.get("task_description"),
+            "is_urgent": is_urgent,
+            "due_date": request.form.get("due_date"),
+            "created_by": session["user"]
+        }
+        mongo.db.tasks.update({"_id": ObjectId(task_id)}, submit)
+        flash("Task Successfully Updated")
+
+    task = mongo.db.tasks.find_one({"_id": ObjectId(task_id)})
+    categories = mongo.db.categories.find().sort("category_name", 1)
+    return render_template("edit_task.html", task=task, categories=categories)
 
 
 if __name__ == "__main__":
